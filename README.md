@@ -7,13 +7,13 @@ database.
 
 So everything here but this disclaimer was written by AI. Felt that is worth mentioning.
 
-# Why?
+### Why?
 I wanted a "simple" Zig library that formatted time strings for personal projects. The recommendation was to use ctime. I didn't really want to pull in C just for that. But I also didn't want to write what ended up being 25KB of string formatting myself either.
 
-# The library itself.
+### The library itself.
 So the first thing to know is there is no local time capabilities outside of explicitly setting the offset or timezone. I personally don't need this myself so I didn't bother. Keep it small-ish. If anyone else ever finds this useful, and wants that feature, then I could implement it.
 
-# What I've confirmed myself.
+### What I've confirmed myself.
 I've skimmed through the code, and these files, and saw a lot of comments and string formatting. I have compiled and ran the demo on both aarch64-Linux and x86_64-Linux. There isn't any reason to believe it shouldn't be fully portable with your system. I hope by the time anyone actually sees this, I've implemented it in my own handwritten library I'm working on.
 
 ## Usage
