@@ -5,23 +5,73 @@ on:
   pull_request:
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  zig-0_16:
+    strategy:
+     fail-fast: false
+     matrix:
+       include:
+        - zig: "0.16.0"
+          os: ubuntu-latest
+        - zig: "0.16.0"
+          os: ubuntu-24.04-arm
+        - zig: "0.16.0"
+          os: windows-latest
+
+    runs-on: ${{ matrix.os }}
+      
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.16.0   # pinned: do not let minimum_zig_version resolve this
+          version: ${{ matrix.zig }}
+      - run: zig fmt --check build.zig src examples
+      - run: zig build test --summary all
+      - run: zig build example
+
+  zig-0_17:
+    strategy:
+     fail-fast: false
+     matrix:
+       include:
+        - zig: "0.17.0"
+          os: ubuntu-latest
+        - zig: "0.17.0"
+          os: ubuntu-24.04-arm
+        - zig: "0.17.0"
+          os: windows-latest
+
+    runs-on: ${{ matrix.os }}
+      
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: ${{ matrix.zig }}
       - run: zig fmt --check build.zig src examples
       - run: zig build test --summary all
       - run: zig build example
 
   zig-master:
-    runs-on: ubuntu-latest
-    continue-on-error: true
+    strategy:
+     fail-fast: false
+     matrix:
+       include:
+        - zig: "master"
+          os: ubuntu-latest
+        - zig: "master"
+          os: ubuntu-24.04-arm
+        - zig: "master"
+          os: windows-latest
+
+    runs-on: ${{ matrix.os }}
+      
     steps:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v2
         with:
-          version: master
+          version: ${{ matrix.zig }}
+      - run: zig fmt --check build.zig src examples
       - run: zig build test --summary all
+      - run: zig build example
+
+
