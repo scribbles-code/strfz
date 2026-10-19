@@ -1,13 +1,12 @@
 .{
     .name = .strfz,
-    .version = "0.1.0",
+    .version = "0.2.0",
     .fingerprint = 0x480fb2f40cea9831,
     .minimum_zig_version = "0.16.0",
     .paths = .{
         "build.zig",
         "build.zig.zon",
         "src",
-        "examples",
         "README.md",
         "LICENSE",
     },
