@@ -376,27 +376,27 @@ fn putComposite(w: *Writer, fmt: []const u8, t: DateTime, o: Opts) Error!void {
 /// Format unix seconds into `buf` — buffer, format, then the values, the way
 /// `std.fmt.bufPrint` reads. `fmt` may be null for the default "%F %T".
 /// `utc_offset` is seconds east of UTC (0 for UTC).
-pub fn format(
+///
+/// Cannot fail: if `buf` is too small the output is truncated to what fits.
+pub fn formatUnix(
     buf: []u8,
     fmt: ?[]const u8,
     secs: i64,
     utc_offset: i32,
-) error{NoSpaceLeft}![]u8 {
+) []u8 {
     var w = Writer.fixed(buf);
-    formatTo(&w, fmt orelse "%F %T", DateTime.fromUnix(secs, utc_offset)) catch |e| switch (e) {
-        error.WriteFailed => return error.NoSpaceLeft,
-    };
+    formatTo(&w, fmt orelse "%F %T", DateTime.fromUnix(secs, utc_offset)) catch {};
     return w.buffered();
 }
 
 /// The same thing when you already hold a `DateTime` — no unix round-trip.
 /// Use this to carry a `zone` name through `%Z`, or when the caller has a
-/// broken-down date rather than seconds.
-pub fn formatBuf(buf: []u8, fmt: []const u8, t: DateTime) error{NoSpaceLeft}![]u8 {
+/// broken-down date rather than seconds. `fmt` may be null for "%F %T".
+///
+/// Cannot fail: if `buf` is too small the output is truncated to what fits.
+pub fn formatDateTime(buf: []u8, fmt: ?[]const u8, t: DateTime) []u8 {
     var w = Writer.fixed(buf);
-    formatTo(&w, fmt, t) catch |e| switch (e) {
-        error.WriteFailed => return error.NoSpaceLeft,
-    };
+    formatTo(&w, fmt orelse "%F %T", t) catch {};
     return w.buffered();
 }
 
@@ -406,7 +406,7 @@ const testing = std.testing;
 
 fn expectFmt(expected: []const u8, fmt: []const u8, t: DateTime) !void {
     var buf: [256]u8 = undefined;
-    const got = try formatBuf(&buf, fmt, t);
+    const got = formatDateTime(&buf, fmt, t);
     try testing.expectEqualStrings(expected, got);
 }
 
@@ -526,10 +526,19 @@ test "pre-1970 and negative offsets" {
     try expectFmt("18", "%C", t3);
 }
 
-test "no space left" {
+test "a too-small buffer truncates instead of failing" {
+    const t = DateTime{ .year = 2026, .month = 10, .day = 18 };
+    // "%F" wants 10 bytes; only 4 fit, and the prefix is still correct
     var buf: [4]u8 = undefined;
-    try testing.expectError(error.NoSpaceLeft, formatBuf(&buf, "%F", DateTime{ .year = 2026, .month = 10, .day = 18 }));
-    try testing.expectEqualStrings("2026", try formatBuf(&buf, "%Y", DateTime{ .year = 2026, .month = 1, .day = 1 }));
+    try testing.expectEqualStrings("2026", formatDateTime(&buf, "%F", t));
+    // an exact fit is a complete result, not a truncation
+    try testing.expectEqualStrings("2026", formatDateTime(&buf, "%Y", t));
+    // so is one byte
+    var one: [1]u8 = undefined;
+    try testing.expectEqualStrings("2", formatUnix(&one, "%Y", 1792290918, 0));
+    // and an empty buffer yields an empty slice rather than a panic
+    var none: [0]u8 = undefined;
+    try testing.expectEqual(@as(usize, 0), formatUnix(&none, "%F", 0, 0).len);
 }
 
 test "out-of-range fields do not panic" {
@@ -538,7 +547,7 @@ test "out-of-range fields do not panic" {
     const m0 = DateTime{ .year = 2026, .month = 0, .day = 0 };
     const m13 = DateTime{ .year = 2026, .month = 13, .day = 40 };
     for ([_]DateTime{ m0, m13 }) |t| {
-        _ = try formatBuf(&buf, "%F %B %b %A %a %e %j", t);
+        _ = formatDateTime(&buf, "%F %B %b %A %a %e %j", t);
     }
     try expectFmt("January", "%B", m0);
     try expectFmt("December", "%B", m13);
@@ -562,13 +571,14 @@ test "flags reach %p and %z" {
 test "absurd widths do not overflow" {
     var buf: [64]u8 = undefined;
     const t = DateTime{ .year = 2026, .month = 10, .day = 18 };
-    // used to panic: width accumulated with `*` and `+` into usize
-    try testing.expectError(error.NoSpaceLeft, formatBuf(&buf, "%99999999999999999999d", t));
-    try testing.expectError(error.NoSpaceLeft, formatBuf(&buf, "%65535d", t));
+    // used to panic: width accumulated with `*` and `+` into usize.
+    // the width now clamps to max_width and the overlong run truncates
+    try testing.expectEqual(@as(usize, 64), formatDateTime(&buf, "%99999999999999999999d", t).len);
+    try testing.expectEqual(@as(usize, 64), formatDateTime(&buf, "%65535d", t).len);
     // a width that fits is still honoured, and %d pads with zeros by default
     var big: [16]u8 = undefined;
-    try testing.expectEqualStrings("000000000018", try formatBuf(&big, "%12d", t));
-    try testing.expectEqualStrings("          18", try formatBuf(&big, "%_12d", t));
+    try testing.expectEqualStrings("000000000018", formatDateTime(&big, "%12d", t));
+    try testing.expectEqualStrings("          18", formatDateTime(&big, "%_12d", t));
 }
 
 test "%- drops default padding but keeps an explicit width" {
@@ -590,26 +600,27 @@ test "extreme timestamps clamp instead of trapping" {
     const lo = DateTime.fromUnix(std.math.minInt(i64), 0);
     try testing.expectEqual(@as(i32, std.math.maxInt(i32)), hi.year);
     try testing.expectEqual(@as(i32, std.math.minInt(i32)), lo.year);
-    _ = try formatBuf(&buf, "%F %T %G %V", hi);
-    _ = try formatBuf(&buf, "%F %T %G %V", lo);
+    _ = formatDateTime(&buf, "%F %T %G %V", hi);
+    _ = formatDateTime(&buf, "%F %T %G %V", lo);
 }
 
 test "iso week math survives extreme years" {
     var buf: [64]u8 = undefined;
     // dec31Weekday used to overflow i32 here
-    _ = try formatBuf(&buf, "%G %V %g", DateTime{ .year = std.math.maxInt(i32), .month = 12, .day = 31 });
-    _ = try formatBuf(&buf, "%G %V %g", DateTime{ .year = std.math.minInt(i32), .month = 1, .day = 1 });
+    _ = formatDateTime(&buf, "%G %V %g", DateTime{ .year = std.math.maxInt(i32), .month = 12, .day = 31 });
+    _ = formatDateTime(&buf, "%G %V %g", DateTime{ .year = std.math.minInt(i32), .month = 1, .day = 1 });
     try expectFmt("00", "%C", DateTime{ .year = 0, .month = 1, .day = 1 });
 }
 
 test "fmt: buffer in, formatted time out" {
     var buf: [32]u8 = undefined;
-    try testing.expectEqualStrings("2026-10-17 19:35:18", try format(&buf, null, 1792290918, -7 * 3600));
-    try testing.expectEqualStrings("2026-10-18 02:35:18", try format(&buf, null, 1792290918, 0));
-    try testing.expectEqualStrings("1969-12-31 23:59:59", try format(&buf, null, -1, 0));
+    try testing.expectEqualStrings("2026-10-17 19:35:18", formatUnix(&buf, null, 1792290918, -7 * 3600));
+    try testing.expectEqualStrings("2026-10-18 02:35:18", formatUnix(&buf, null, 1792290918, 0));
+    try testing.expectEqualStrings("1969-12-31 23:59:59", formatUnix(&buf, null, -1, 0));
     // custom specifiers through the same door
-    try testing.expectEqualStrings("Saturday, day 290", try format(&buf, "%A, day %j", 1792290918, -7 * 3600));
+    try testing.expectEqualStrings("Saturday, day 290", formatUnix(&buf, "%A, day %j", 1792290918, -7 * 3600));
 
+    // "%F %T" is 19 bytes; ten fit
     var small: [10]u8 = undefined;
-    try testing.expectError(error.NoSpaceLeft, format(&small, null, 1792290918, 0));
+    try testing.expectEqualStrings("2026-10-18", formatUnix(&small, null, 1792290918, 0));
 }

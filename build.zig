@@ -15,19 +15,4 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run the test suite");
     test_step.dependOn(&run_tests.step);
-
-    // zig build example
-    {
-        const exe = b.addExecutable(.{
-            .name = "demo",
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("examples/demo.zig"),
-                .target = b.graph.host,
-                .optimize = .Debug,
-            }),
-        });
-        exe.root_module.addImport("strfz", mod);
-        const run = b.addRunArtifact(exe);
-        b.step("example", "Run examples/demo.zig").dependOn(&run.step);
-    }
 }

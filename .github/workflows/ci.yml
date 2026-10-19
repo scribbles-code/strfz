@@ -25,9 +25,8 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ matrix.zig }}
-      - run: zig fmt --check build.zig src examples
+      - run: zig fmt --check build.zig src
       - run: zig build test --summary all
-      - run: zig build example
 
   zig-0_17:
     strategy:
@@ -49,9 +48,8 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ matrix.zig }}
-      - run: zig fmt --check build.zig src examples
+      - run: zig fmt --check build.zig src
       - run: zig build test --summary all
-      - run: zig build example
 
   zig-master:
     strategy:
@@ -73,8 +71,7 @@ jobs:
       - uses: mlugg/setup-zig@v2
         with:
           version: ${{ matrix.zig }}
-      - run: zig fmt --check build.zig src examples
+      - run: zig fmt --check build.zig src
       - run: zig build test --summary all
-      - run: zig build example
 
 

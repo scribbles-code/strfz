@@ -25,20 +25,21 @@ const strfz = @import("strfz");
 pub fn main(init: std.process.Init) !void {
     var buf: [32]u8 = undefined;
     const secs = std.Io.Timestamp.now(init.io, .real).toSeconds();
-    const s = try strfz.format(&buf, "%F %T", secs, 0);   // "2026-10-18 09:07:05"
+    const s = strfz.formatUnix(&buf, "%F %T", secs, 0);   // "2026-10-18 09:07:05"
 }
 ```
 
-Buffer in, string out, `error{NoSpaceLeft}![]u8`. `secs` is unix seconds, the
+Buffer in, string out, `[]u8` of what was written. `secs` is unix seconds, the
 last argument is the offset east of UTC in seconds, and `fmt` may be `null` for
-`"%F %T"`.
+`"%F %T"`. Neither function can fail: a `buf` too small for the result is
+truncated to what fits.
 
-Already holding the fields? `formatBuf` skips the unix round-trip and is the
+Already holding the fields? `formatDateTime` skips the unix round-trip and is the
 only way to get a name into `%Z`:
 
 ```zig
 const t = strfz.DateTime{ .year = 2026, .month = 12, .day = 25, .zone = "PST" };
-const s = try strfz.formatBuf(&buf, "%F %T %Z", t);   // "2026-12-25 00:00:00 PST"
+const s = strfz.formatDateTime(&buf, "%F %T %Z", t);   // "2026-12-25 00:00:00 PST"
 ```
 
 ## Specifiers
@@ -111,7 +112,6 @@ Unknown specifiers pass through verbatim. Out-of-range fields (`month = 0`,
 
 ```
 zig build test      # 13 tests
-zig build example   # runs examples/demo.zig
 ```
 
 MIT — see `LICENSE`.
