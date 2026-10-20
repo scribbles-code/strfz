@@ -2,13 +2,12 @@
 //! Minimal `strftime(3)`-style formatting for Zig (0.16).
 //!
 //! Choices that differ from C, on purpose:
-//!   * The input is a broken-down civil time (`DateTime`), not a `time_t`.
-//!     That is also what C does -- but here it is the only entry point, so the
-//!     library never has to know about timezones. There is no tzdb in this
-//!     file: you hand in a UTC offset, or you fill the struct yourself.
-//!   * Output goes to a `std.Io.Writer`. Nothing truncates, so there is no
-//!     "buffer too small" ambiguity and no `0` return meaning both "failed"
-//!     and "empty". `formatBuf` exists for the C-shaped call site.
+//!   * No timezone database. `formatUnix` takes a UTC offset in seconds; the
+//!     `DateTime` route reads the fields as you set them, and `%Z` prints
+//!     `zone` verbatim. Nothing here opens a tzdb or the local-time setting.
+//!   * No error union, so no `0` return hanging between "failed" and "empty":
+//!     the two entry points take a `[]u8` and return the prefix that fit. A
+//!     short buffer truncates rather than reporting anything.
 //!   * Composite specifiers (%F, %T, %c, ...) expand by recursing over a
 //!     literal format string, so they cost nothing and hold no state.
 
@@ -373,11 +372,12 @@ fn putComposite(w: *Writer, fmt: []const u8, t: DateTime, o: Opts) Error!void {
     try w.writeAll(s);
 }
 
-/// Format unix seconds into `buf` — buffer, format, then the values, the way
-/// `std.fmt.bufPrint` reads. `fmt` may be null for the default "%F %T".
-/// `utc_offset` is seconds east of UTC (0 for UTC).
+/// Writes `secs` to `buf` as the local civil time at `utc_offset`, formatted
+/// by `fmt`. Returns the bytes written.
 ///
-/// Cannot fail: if `buf` is too small the output is truncated to what fits.
+/// `fmt` null uses "%F %T". `utc_offset` is seconds east of UTC: 0 is UTC,
+/// -25200 is UTC-07:00. No error is returned -- output past `buf.len` is
+/// dropped, and a zero-length `buf` writes nothing.
 pub fn formatUnix(
     buf: []u8,
     fmt: ?[]const u8,
@@ -389,11 +389,12 @@ pub fn formatUnix(
     return w.buffered();
 }
 
-/// The same thing when you already hold a `DateTime` — no unix round-trip.
-/// Use this to carry a `zone` name through `%Z`, or when the caller has a
-/// broken-down date rather than seconds. `fmt` may be null for "%F %T".
+/// Writes `t` to `buf`, formatted by `fmt`. Returns the bytes written.
 ///
-/// Cannot fail: if `buf` is too small the output is truncated to what fits.
+/// Fields are printed as given -- `t.utc_offset` and `t.zone` are read
+/// directly and nothing is converted, which is how a zone name reaches `%Z`.
+/// `fmt` null uses "%F %T". No error is returned -- output past `buf.len` is
+/// dropped, and a zero-length `buf` writes nothing.
 pub fn formatDateTime(buf: []u8, fmt: ?[]const u8, t: DateTime) []u8 {
     var w = Writer.fixed(buf);
     formatTo(&w, fmt orelse "%F %T", t) catch {};

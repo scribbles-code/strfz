@@ -1,6 +1,6 @@
 .{
     .name = .strfz,
-    .version = "0.2.0",
+    .version = "0.2.1",
     .fingerprint = 0x480fb2f40cea9831,
     .minimum_zig_version = "0.16.0",
     .paths = .{
